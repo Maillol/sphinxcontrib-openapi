@@ -409,3 +409,113 @@ class TestResolveRefs(object):
                 'c': True,
             }
         }
+
+
+class TestConvertJsonSchema(object):
+
+    schema = {
+        'type': 'object',
+        'required': ['name', 'surprise'],
+        'properties': {
+            'name': {
+                'type': 'string',
+                'description': 'The name of user'
+            },
+            'alias': {
+                'type': 'array',
+                'items': {
+                    'type': 'string'
+                },
+                'description': 'The list of user alias'
+            },
+            'id': {
+                'type': 'integer',
+                'description': 'the id of user',
+                'readOnly': True
+            },
+            'surprise': {
+                'type': 'string'
+            },
+            'secret': {
+                'type': 'string',
+                'writeOnly': True
+            }
+        }
+    }
+
+    request_result = list(openapi.convert_json_schema(schema, 'request'))
+    response_result = list(openapi.convert_json_schema(schema, 'response'))
+
+    def test_required_field_with_description(self):
+        expected_request = ':<json string name: (required) The name of user'
+        expected_response = ':>json string name: (required) The name of user'
+        assert expected_request in self.request_result
+        assert expected_response  in self.response_result
+
+    def test_required_field_without_description(self):
+        assert ':<json string surprise: (required)' in self.request_result
+        assert ':>json string surprise: (required)' in self.response_result
+
+    def test_array_field(self):
+        assert ':<json string alias[]' in self.request_result
+        assert ':>json string alias[]' in self.response_result
+
+    def test_read_only_field_should_not_displayed_in_request(self):
+        assert ':<json integer id: the id of user' not in self.request_result
+        assert ':>json integer id: the id of user' in self.response_result
+
+    def test_write_only_field_should_not_displayed_in_response(self):
+        assert ':<json string secret' in self.request_result
+        assert ':>json string secret' not in self.response_result
+
+    def test_nested_schema(self):
+        schema = {
+            'type': 'object',
+            'required': ['name'],
+            'properties': {
+                'name': {
+                    'type': 'string',
+                    'description': 'The name of user'
+                },
+                'friends': {
+                    'type': 'array',
+                    'items': {
+                        'type': 'object',
+                        'properties': {
+                            'name': {
+                                'type': 'string'
+                            },
+                            'age': {'type': 'integer'}
+                        }
+                    },
+                    'description': 'The list of user alias'
+                },
+                'id': {
+                    'type': 'integer',
+                    'description': 'the id of user',
+                },
+                'car': {
+                    'type': 'object',
+                    'properties': {
+                        'provider': {'type': 'string'},
+                        'date': {
+                            'type': 'string',
+                            'description': 'The car of user'
+                        }
+                    }
+                }
+            }
+        }
+
+        result = '\n'.join(openapi.convert_json_schema(schema))
+
+        expected = textwrap.dedent('''
+            :<json string car.date: The car of user
+            :<json string car.provider
+            :<json integer friends[].age
+            :<json string friends[].name
+            :<json integer id: the id of user
+            :<json string name: (required) The name of user'''.strip('\n'))
+
+        assert result == expected
+
